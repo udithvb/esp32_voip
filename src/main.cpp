@@ -8,14 +8,16 @@
 #include "ConfigManager.h"
 #include "voipphone.h"
 #include "ClickButton.h"
-#include <Adafruit_NeoPixel.h>
-#include <Dusk2Dawn.h>
+// #include <Adafruit_NeoPixel.h>
+// #include <Dusk2Dawn.h>
 #include <TimeLib.h>
 #include "pages.h"
+#include <EEPROM.h>
+#include <SPIFFS.h>
 
 #define WS2812PIN 32
 #define NUMPIXELS 3
-Adafruit_NeoPixel pixels(NUMPIXELS, WS2812PIN, NEO_GRB + NEO_KHZ400);
+// Adafruit_NeoPixel pixels(NUMPIXELS, WS2812PIN, NEO_GRB + NEO_KHZ400);
 
 #define mDNSUpdate(c)  do {} while(0)
 using WebServerClass = WebServer;
@@ -111,16 +113,16 @@ void APICallback(WebServer *server) {
   
   server->on("/debug", HTTPMethod::HTTP_GET, [server](){
     String output = String(ntp.formattedTime("%d.%m.%Y %X"))+"</br>";
-    Dusk2Dawn location = Dusk2Dawn(config.lat, config.lon, config.tz_std/60);
-    int sr_min = location.sunrise( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
-    int ss_min = location.sunset( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
+    // Dusk2Dawn location = Dusk2Dawn(config.lat, config.lon, config.tz_std/60);
+    // int sr_min = location.sunrise( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
+    // int ss_min = location.sunset( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
     int min = ntp.hours()*60+ntp.minutes();
     output += "Now:"+String(min)+"</br>";
-    output += "Sunrise:"+String(sr_min)+"</br>";
-    output += "Sunset:"+String(ss_min)+"</br>";
-    output += "LED0:"+String(pixels.getPixelColor(0));
-    output += "LED1:"+String(pixels.getPixelColor(1));
-    output += "LED2:"+String(pixels.getPixelColor(2));
+    // output += "Sunrise:"+String(sr_min)+"</br>";
+    // output += "Sunset:"+String(ss_min)+"</br>";
+    // output += "LED0:"+String(pixels.getPixelColor(0));
+    // output += "LED1:"+String(pixels.getPixelColor(1));
+    // output += "LED2:"+String(pixels.getPixelColor(2));
     server->send(200, mimeHTML, output);
   });
 
@@ -147,15 +149,84 @@ void APICallback(WebServer *server) {
   httpUpdate.setup(server);
 }
 
+void clearEEPROM() {
+    EEPROM.begin(512);  // Initialize EEPROM with size
+    for (int i = 0; i < 512; i++) {
+        EEPROM.write(i, 0);
+    }
+    EEPROM.commit();
+    EEPROM.end();
+}
+
 void setup() {
   Serial.begin(115200);
-  Serial.println();
-  Serial.println("Startup...");
-  pixels.begin();
-  pixels.setPixelColor(0, pixels.Color(255, 0, 0));
-  pixels.setPixelColor(1, pixels.Color(0, 255, 0));
-  pixels.setPixelColor(2, pixels.Color(0, 0, 255));
-  pixels.show();
+
+
+  // clearEEPROM();
+  // Serial.println("Cleared EEPROM");
+
+
+  // Add WiFi event handler for both AP and STA modes
+  WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+      switch(event) {
+          // Existing AP events
+          case SYSTEM_EVENT_AP_START:
+              Serial.println("AP Started");
+              break;
+          case SYSTEM_EVENT_AP_STACONNECTED:
+              Serial.printf("Device connected. MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
+                  info.sta_connected.mac[0], info.sta_connected.mac[1],
+                  info.sta_connected.mac[2], info.sta_connected.mac[3],
+                  info.sta_connected.mac[4], info.sta_connected.mac[5]);
+              break;
+          case SYSTEM_EVENT_AP_STADISCONNECTED:
+              Serial.printf("Device disconnected. MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
+                  info.sta_disconnected.mac[0], info.sta_disconnected.mac[1],
+                  info.sta_disconnected.mac[2], info.sta_disconnected.mac[3],
+                  info.sta_disconnected.mac[4], info.sta_disconnected.mac[5]);
+              break;
+          case SYSTEM_EVENT_AP_PROBEREQRECVED:
+              Serial.println("Probe request received");
+              break;
+
+          // New STA events
+          case SYSTEM_EVENT_STA_START:
+              Serial.println("STA Started");
+              break;
+          case SYSTEM_EVENT_STA_CONNECTED:
+              Serial.println("Connected to WiFi network");
+              break;
+          case SYSTEM_EVENT_STA_GOT_IP:
+              Serial.print("Got IP: ");
+              Serial.println(WiFi.localIP());
+              break;
+          case SYSTEM_EVENT_STA_DISCONNECTED:
+              Serial.println("Disconnected from WiFi network");
+              // Optionally attempt to reconnect
+              WiFi.reconnect();
+              break;
+          case SYSTEM_EVENT_STA_LOST_IP:
+              Serial.println("Lost IP address");
+              break;
+      }
+  });
+  
+  // Memory in KB
+  Serial.printf("Free Heap: %.2f KB\n", ESP.getFreeHeap() / 1024.0);
+  Serial.printf("Minimum Free Heap: %.2f KB\n", ESP.getMinFreeHeap() / 1024.0);
+  Serial.printf("Heap Size: %.2f KB\n", ESP.getHeapSize() / 1024.0);
+  Serial.printf("Chip Revision: %d\n", ESP.getChipRevision());
+  
+  Serial.printf("WiFi Status: %d\n", WiFi.status());
+  
+  // pixels.begin();
+  // pixels.setPixelColor(0, pixels.Color(255, 0, 0));
+  // pixels.setPixelColor(1, pixels.Color(0, 255, 0));
+  // pixels.setPixelColor(2, pixels.Color(0, 0, 255));
+  // pixels.show();
+  
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
 
   pinMode(4,INPUT_PULLUP);
   pinMode(2,INPUT_PULLUP);
@@ -173,7 +244,7 @@ void setup() {
   config.tz_dst = 120;
   config.tz_std = 60;
   // Setup config manager
-  configManager.setAPName("voipdoorbell");
+  configManager.setAPName("kubo32");
   configManager.setAPFilename("/index.html");
   // Settings variables 
   configManager.addParameter("device_name", config.device_name, 32);
@@ -207,17 +278,40 @@ void setup() {
 
   ntp.ruleDST("CEST", Last, Sun, Mar, 2, config.tz_dst); // last sunday in march 2:00, timezone +120min (+1 GMT + 1h summertime offset)
   ntp.ruleSTD("CET", Last, Sun, Oct, 3, config.tz_std); // last sunday in october 3:00, timezone +60min (+1 GMT)
-  ntp.begin();
+  Serial.println("End of setup");
+
+
+  // // Format SPIFFS if mount fails
+  // if(!SPIFFS.begin(true)) {
+  //   Serial.println("SPIFFS Mount Failed, formatting...");
+  //   SPIFFS.format();
+  //   if(!SPIFFS.begin(true)) {
+  //     Serial.println("SPIFFS Mount Failed after formatting!");
+  //     return;
+  //   }
+  // }
+  // Serial.println("SPIFFS Mount Successful");
+
+
+
 }
 
 void loop() {
+  // Serial.println("started loop");
   if (WiFi.status() == WL_CONNECTED ) {
-    ntp.update();
+    // Serial.println("wifi.status -> wl_connected");
+    // ntp.update();
     if(strlen(config.sip_ip)<7) {
-      //Serial.println("Configuration fault.");
+      Serial.println("Configuration fault.");
     } else {
       if( !doorphonerunning ) {
-        Serial.print("Online. Starting sip modul...");
+
+        Serial.println("printing config below :");
+        Serial.println(config.sip_ip);
+        Serial.println(config.sip_user);
+        Serial.println(config.sip_pass);
+        Serial.println("Online. Starting sip module...");
+
         if(int result = doorphone.begin(config.sip_ip,config.sip_user,config.sip_pass)==VOIPPHONE_OK) {
           doorphone.setAmpGain(config.amp_gain);
           doorphone.setMicGain(config.mic_gain);
@@ -236,8 +330,8 @@ void loop() {
         pixels.setPixelColor(0, pixels.Color(0, 0, 0));
         pixels.setPixelColor(1, pixels.Color(0, 0, 0));
         pixels.setPixelColor(2, pixels.Color(0, 0, 0));*/
-        pixels.clear();
-        pixels.show();
+        // pixels.clear();
+        // pixels.show();
       }
       button1.Update();
       button2.Update();
@@ -245,20 +339,20 @@ void loop() {
       if(button1.clicks==1) {
         Serial.println("Button1 pressed. Dialing...");
         doorphone.dial(config.telnr_1,config.device_name);
-        pixels.setPixelColor(2, pixels.Color(config.ring_r, config.ring_g, config.ring_b));
-        pixels.show();
+        // pixels.setPixelColor(2, pixels.Color(config.ring_r, config.ring_g, config.ring_b));
+        // pixels.show();
         isbusy = true;
       } else if(button2.clicks==1) {
         Serial.println("Button2 pressed. Dialing...");
         doorphone.dial(config.telnr_2,config.device_name);
-        pixels.setPixelColor(1, pixels.Color(config.ring_r, config.ring_g, config.ring_b));
-        pixels.show();
+        // pixels.setPixelColor(1, pixels.Color(config.ring_r, config.ring_g, config.ring_b));
+        // pixels.show();
         isbusy = true;
       } else if(button3.clicks==1) {
         Serial.println("Button3 pressed. Dialing...");
         doorphone.dial(config.telnr_3,config.device_name);
-        pixels.setPixelColor(0, pixels.Color(config.ring_r, config.ring_g, config.ring_b));
-        pixels.show();
+        // pixels.setPixelColor(0, pixels.Color(config.ring_r, config.ring_g, config.ring_b));
+        // pixels.show();
         isbusy = true;
       }
     }
@@ -270,31 +364,33 @@ void loop() {
   // hangup
   if(isbusy && !doorphone.isBusy()) {
     isbusy = false;
-    pixels.clear();
-    pixels.show();
+    // pixels.clear();
+    // pixels.show();
     islighton = false;
   }
 
-  Dusk2Dawn location = Dusk2Dawn(config.lat, config.lon, config.tz_std/60);
-  int sr_min = location.sunrise( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
-  int ss_min = location.sunset( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
-  int min = ntp.hours()*60+ntp.minutes();
-  if(min > ss_min || min < sr_min) { // lights on
-    if (!islighton) {
-      islighton = true;
-      pixels.setPixelColor(0, pixels.Color(config.light_r, config.light_g, config.light_b));
-      pixels.setPixelColor(1, pixels.Color(config.light_r, config.light_g, config.light_b));
-      pixels.setPixelColor(2, pixels.Color(config.light_r, config.light_g, config.light_b));
-      pixels.show();
-    }
-  } else { // lights off
-    if (islighton) {
-      islighton = false;
-      pixels.clear();
-      pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-      pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-      pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-      pixels.show();
-    }
-  }
+  // Dusk2Dawn location = Dusk2Dawn(config.lat, config.lon, config.tz_std/60);
+  // int sr_min = location.sunrise( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
+  // int ss_min = location.sunset( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
+  // int min = ntp.hours()*60+ntp.minutes();
+  // if(min > ss_min || min < sr_min) { // lights on
+  //   if (!islighton) {
+  //     islighton = true;
+  //     // pixels.setPixelColor(0, pixels.Color(config.light_r, config.light_g, config.light_b));
+  //     // pixels.setPixelColor(1, pixels.Color(config.light_r, config.light_g, config.light_b));
+  //     // pixels.setPixelColor(2, pixels.Color(config.light_r, config.light_g, config.light_b));
+  //     // pixels.show();
+  //   }
+  // } else { // lights off
+  //   if (islighton) {
+  //     islighton = false;
+  //     // pixels.clear();
+  //     // pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+  //     // pixels.setPixelColor(1, pixels.Color(0, 0, 0));
+  //     // pixels.setPixelColor(2, pixels.Color(0, 0, 0));
+  //     // pixels.show();
+  //   }
+  // }
+
+  // Serial.println("End of loop");
 }
