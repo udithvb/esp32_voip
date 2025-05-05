@@ -26,6 +26,8 @@ int VOIPPhone::begin(const char *sipip,const char *sipuser,const char *sippasswd
   sip = new Sip(caSipOut, sizeof(caSipOut));
   sip->Init(sipip, sipport , myip, sipport, sipuser, sippasswd); // 15 seconds
   DebugPrintln("[OK]");
+  DebugPrintln("Registering...");
+  sip->Register();
   // i2s devices
   int result = initi2smic();
   if(result!=VOIPPHONE_OK) {

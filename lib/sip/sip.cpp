@@ -233,7 +233,7 @@ void Sip::Invite(const char *p)
   // not needed for fritzbox
   AddSipLine("User-Agent: sipdial by jw");
   AddSipLine("From: \"%s\"  <sip:%s@%s>;tag=%010u", pDialDesc, pSipUser, pSipIp, tagid);
-  AddSipLine("Via: SIP/2.0/UDP %s:%i;branch=%010u;rport=%i", pMyIp, iMyPort, branchid, iMyPort);
+  AddSipLine("Via: SIP/2.0/UDP %s:%i;branch=z9hG4bK%08X;rport", pMyIp, iMyPort, random(0xFFFFFFFF));
   AddSipLine("To: <sip:%s@%s>", pDialNr, pSipIp);
   AddSipLine("Contact: \"%s\" <sip:%s@%s:%i;transport=udp>", pSipUser, pSipUser, pMyIp, iMyPort);
   if (p)
@@ -493,5 +493,33 @@ void Sip::MakeMd5Digest(char *pOutHex33, char *pIn)
   aMd5.add(pIn);
   aMd5.calculate();
   aMd5.getChars(pOutHex33);
+}
+
+void Sip::Register() {
+    // Generate unique IDs for this registration
+    callid = Random();
+    tagid = Random();
+    branchid = Random();
+
+    // Clear the buffer
+    pbuf[0] = 0;
+
+    // Build the REGISTER message
+    AddSipLine("REGISTER sip:%s SIP/2.0", pSipIp);
+    AddSipLine("Via: SIP/2.0/UDP %s:%i;branch=z9hG4bK%08X;rport", pMyIp, iMyPort, random(0xFFFFFFFF));
+    AddSipLine("Max-Forwards: 70");
+    AddSipLine("From: \"%s\" <sip:%s@%s>;tag=%010u", pSipUser, pSipUser, pSipIp, tagid);
+    AddSipLine("To: \"%s\" <sip:%s@%s>", pSipUser, pSipUser, pSipIp);
+    AddSipLine("Call-ID: %010u@%s", callid, pMyIp);
+    AddSipLine("CSeq: 270396 REGISTER");
+    AddSipLine("Contact: \"%s\" <sip:%s@%s:%i;ob>", pSipUser, pSipUser, pMyIp, iMyPort);
+    AddSipLine("Expires: 300");
+    AddSipLine("User-Agent: sipdial by jw");
+    AddSipLine("Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, INFO, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS");
+    AddSipLine("Content-Length: 0");
+    AddSipLine("");
+
+    // Send the REGISTER message
+    SendUdp();
 }
 

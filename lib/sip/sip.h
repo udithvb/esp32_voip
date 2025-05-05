@@ -57,6 +57,7 @@ class Sip
     }
     const char* GetSIPServerIP(void);
     char        audioport[7];
+    void        Register();
     
 };
 #endif
